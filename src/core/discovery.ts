@@ -1,7 +1,7 @@
 import { gatherDomainClues } from "./crawler.js";
 import type { DiscoveryResult, DomainClues, EmailCandidate, EmailLabel, VerificationResult } from "./types.js";
 import { clamp, toSlugPart, unique } from "../utils/domain.js";
-import { createVerifier } from "../providers/index.js";
+import { createVerifier, verificationEnabled } from "../providers/index.js";
 
 const GENERIC_PATTERNS = [
   { local: "wholesale", label: "wholesale likely" as EmailLabel, base: 0.92 },
@@ -77,14 +77,26 @@ async function buildCandidates(
   }
 
   const deduped = dedupeBest(rawCandidates).slice(0, 10);
+  const doVerify = verificationEnabled();
+
   const verified = await Promise.all(
-    deduped.map(async (candidate) => ({
+    deduped.map(async (candidate, index) => ({
       ...candidate,
-      verification: await verify(candidate.email),
+      verification: doVerify && index === 0
+        ? await verify(candidate.email)
+        : inferenceOnlyVerification(),
     })),
   );
 
   return verified.map(applyVerificationAdjustments).sort((a, b) => a.priority - b.priority || b.confidence - a.confidence);
+}
+
+function inferenceOnlyVerification(): VerificationResult {
+  return {
+    provider: "none",
+    status: "catch-all / uncertain",
+    raw: { note: "Inference-only MVP mode" },
+  };
 }
 
 function scoreGenericBonus(local: string, clues: DomainClues): number {
@@ -150,6 +162,7 @@ function dedupeBest(candidates: Array<Omit<EmailCandidate, "verification">>): Ar
 function applyVerificationAdjustments(candidate: EmailCandidate): EmailCandidate {
   const v = candidate.verification;
   let confidence = candidate.confidence;
+  if (v.provider === "none") return { ...candidate, confidence: clamp(confidence, 0, 0.99) };
   if (v.status === "verified") confidence += 0.08;
   if (v.status === "likely valid") confidence += 0.02;
   if (v.status === "catch-all / uncertain") confidence -= 0.12;
@@ -161,7 +174,12 @@ function applyVerificationAdjustments(candidate: EmailCandidate): EmailCandidate
 function buildConfidenceSummary(candidates: EmailCandidate[]): string {
   if (!candidates.length) return "No strong outreach emails found.";
   return candidates
-    .map((candidate) => `${candidate.email}: ${Math.round(candidate.confidence * 100)}% (${candidate.verification.status})`)
+    .map((candidate) => {
+      const suffix = candidate.verification.provider === "none"
+        ? "inferred only"
+        : candidate.verification.status;
+      return `${candidate.email}: ${Math.round(candidate.confidence * 100)}% (${suffix})`;
+    })
     .join(" | ");
 }
 
@@ -169,5 +187,6 @@ function buildOutreachNotes(clues: DomainClues, candidates: EmailCandidate[]): s
   const businessType = clues.businessType.replace(/_/g, " ");
   const best = candidates[0];
   const roleHint = clues.personClues[0]?.title ?? clues.roleClues[0] ?? "no direct role clue";
-  return `Business type looks like ${businessType}. Best outreach route is ${best?.email ?? "none"} because it maps most closely to wholesale/buyer access. Public role clue: ${roleHint}. Use softer retail/wholesale positioning for first touch.`;
+  const verificationMode = verificationEnabled() ? "Top-ranked email verified through provider; remaining candidates inferred." : "MVP inference-only mode; no external verifier used.";
+  return `Business type looks like ${businessType}. Best outreach route is ${best?.email ?? "none"} because it maps most closely to wholesale/buyer access. Public role clue: ${roleHint}. ${verificationMode}`;
 }

@@ -2,6 +2,13 @@
 
 Production-oriented internal lead enrichment tool for Not Just Sundays wholesale outreach.
 
+## MVP approach
+
+- No external verifier by default
+- Use inference + confidence scoring + manual review
+- If you enable a verifier later, only the top-ranked email is verified
+- Remaining candidates stay inferred so costs stay low
+
 ## Features
 
 - Reads lead rows from Notion
@@ -12,7 +19,7 @@ Production-oriented internal lead enrichment tool for Not Just Sundays wholesale
 - Extracts names, titles, and wholesale-relevant contact clues
 - Infers likely business emails when none are explicitly listed
 - Prioritizes owner, founder, buyer, partnerships, wholesale, manager, bookstore/ministry contacts
-- Verifies emails through a pluggable provider adapter
+- Optional verification through a pluggable provider adapter
 - Writes structured results back into dedicated Notion fields
 - Logs failures into a Notion error field
 - Caches crawl results to reduce repeated requests
@@ -41,11 +48,14 @@ NOTION_OUTREACH_NOTES_PROPERTY=outreach_notes
 NOTION_PROCESSED_AT_PROPERTY=processed_at
 NOTION_ERROR_PROPERTY=notes_error
 
-EMAIL_VERIFIER_PROVIDER=hunter
-HUNTER_API_KEY=
-ZEROBOUNCE_API_KEY=
+EMAIL_VERIFIER_PROVIDER=none
+```
+
+For V2, choose one verifier and only the top-ranked email will be checked:
+
+```bash
+EMAIL_VERIFIER_PROVIDER=abstract
 ABSTRACT_API_KEY=
-MAILBOXLAYER_API_KEY=
 ```
 
 ## Notion schema assumptions
@@ -89,18 +99,31 @@ npm run check
 
 ## Verification providers
 
-Pick one with:
-
-```bash
-EMAIL_VERIFIER_PROVIDER=hunter
-```
-
 Supported:
 
+- none (recommended MVP default)
 - hunter
 - zerobounce
 - abstract
 - mailboxlayer
+
+## Recommended rollout
+
+### MVP
+
+```text
+- EMAIL_VERIFIER_PROVIDER=none
+- no external verification spend
+- use the top 2 to 3 inferred emails with confidence notes
+```
+
+### V2
+
+```text
+- turn on one low-cost verifier
+- verify only the best-ranked email
+- keep recommended_email_2 and recommended_email_3 inference-only
+```
 
 ## Safety notes
 

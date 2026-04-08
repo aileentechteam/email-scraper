@@ -8,8 +8,9 @@ class NoopVerifier implements EmailVerifier {
   async verify(): Promise<VerificationResult> {
     return {
       provider: "none",
-      status: "likely valid",
+      status: "catch-all / uncertain",
       mxFound: undefined,
+      raw: { note: "No external verifier configured. Inference-only mode." },
     };
   }
 }
@@ -91,7 +92,7 @@ class MailboxlayerVerifier implements EmailVerifier {
 }
 
 export function createVerifier(): EmailVerifier {
-  switch ((process.env.EMAIL_VERIFIER_PROVIDER ?? "").toLowerCase()) {
+  switch ((process.env.EMAIL_VERIFIER_PROVIDER ?? "none").toLowerCase()) {
     case "hunter": return new HunterVerifier();
     case "zerobounce": return new ZeroBounceVerifier();
     case "abstract": return new AbstractVerifier();
@@ -100,7 +101,11 @@ export function createVerifier(): EmailVerifier {
   }
 }
 
-async function callJsonApi<T>(url: string, provider: string, mapper: (json: unknown) => VerificationResult): Promise<VerificationResult> {
+export function verificationEnabled(): boolean {
+  return (process.env.EMAIL_VERIFIER_PROVIDER ?? "none").toLowerCase() !== "none";
+}
+
+async function callJsonApi(url: string, provider: string, mapper: (json: unknown) => VerificationResult): Promise<VerificationResult> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(Number(process.env.REQUEST_TIMEOUT_MS ?? 10000)) });
     if (!response.ok) {
