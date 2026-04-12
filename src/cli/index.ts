@@ -4,11 +4,12 @@ import { runNotionDoctor } from "../notion/doctor.js";
 import { syncNotionDatabase } from "../notion/sync.js";
 
 async function main(): Promise<void> {
-  const [command, arg, extra] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const [command, firstArg] = args;
 
-  if (command === "inspect" && arg) {
-    const forceRefresh = extra === "--force";
-    const result = await discoverEmails(arg, forceRefresh);
+  if (command === "inspect" && firstArg) {
+    const forceRefresh = args.includes("--force");
+    const result = await discoverEmails(firstArg, forceRefresh);
     console.log(JSON.stringify(result, null, 2));
     return;
   }
@@ -19,10 +20,11 @@ async function main(): Promise<void> {
   }
 
   if (command === "notion-sync") {
-    const forceRefresh = arg === "--force" || extra === "--force";
-    const limitArg = [arg, extra].find((value) => value?.startsWith("--limit="));
+    const forceRefresh = args.includes("--force");
+    const dryRun = args.includes("--dry-run");
+    const limitArg = args.find((value) => value.startsWith("--limit="));
     const limit = limitArg ? Number(limitArg.split("=")[1]) : undefined;
-    const stats = await syncNotionDatabase(forceRefresh, limit);
+    const stats = await syncNotionDatabase({ forceRefresh, limit, dryRun });
     console.log(JSON.stringify(stats, null, 2));
     return;
   }
@@ -30,7 +32,7 @@ async function main(): Promise<void> {
   console.log("Usage:");
   console.log("  npm run dev -- doctor");
   console.log("  npm run dev -- inspect https://example.com [--force]");
-  console.log("  npm run dev -- notion-sync [--force] [--limit=25]");
+  console.log("  npm run dev -- notion-sync [--dry-run] [--force] [--limit=25]");
 }
 
 main().catch((error) => {

@@ -2,12 +2,30 @@
 
 Production-oriented internal lead enrichment tool for Not Just Sundays wholesale outreach.
 
+## Best first-use flow
+
+Use it in this order:
+
+```bash
+npm run dev -- doctor
+npm run dev -- notion-sync --dry-run --limit=5
+npm run dev -- notion-sync --limit=25
+npm run dev -- notion-sync
+```
+
+That lets you:
+- confirm your Notion schema
+- preview what would be written
+- test a small batch
+- then run the real sync
+
 ## Current usable-state goals
 
 This version is meant to be the first actually usable internal ops tool:
 
 - env loads automatically from `.env`
 - there is a `doctor` command to validate Notion setup before syncing
+- there is a `--dry-run` mode so you can preview writes first
 - sync skips rows already processed unless `--force`
 - you can test with `--limit=25` before running the full table
 - crawl is lightweight, cached, and robots-aware
@@ -76,6 +94,12 @@ Inspect one domain:
 ```bash
 npm run dev -- inspect https://example.com
 npm run dev -- inspect https://example.com --force
+```
+
+Preview a small batch without writing to Notion:
+
+```bash
+npm run dev -- notion-sync --dry-run --limit=5
 ```
 
 Run a safe test batch first:

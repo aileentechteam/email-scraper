@@ -9,7 +9,14 @@ export interface SyncStats {
   failed: number;
 }
 
-export async function syncNotionDatabase(forceRefresh = false, limit?: number): Promise<SyncStats> {
+export interface SyncOptions {
+  forceRefresh?: boolean;
+  limit?: number;
+  dryRun?: boolean;
+}
+
+export async function syncNotionDatabase(options: SyncOptions = {}): Promise<SyncStats> {
+  const { forceRefresh = false, limit, dryRun = false } = options;
   const notion = new Client({ auth: process.env.NOTION_API_KEY });
   const databaseId = process.env.NOTION_DATABASE_ID;
   if (!databaseId) throw new Error("NOTION_DATABASE_ID is required");
@@ -50,18 +57,25 @@ export async function syncNotionDatabase(forceRefresh = false, limit?: number): 
           [fields.error]: richText(""),
         };
 
-        await notion.pages.update({ page_id: row.id, properties: update as any });
+        if (dryRun) {
+          console.log(JSON.stringify({ domain, preview: simplifyUpdate(update) }, null, 2));
+        } else {
+          await notion.pages.update({ page_id: row.id, properties: update as any });
+        }
+
         stats.processed += 1;
-        console.log(`Processed ${domain}`);
+        console.log(`${dryRun ? "Previewed" : "Processed"} ${domain}`);
       } catch (error) {
         stats.failed += 1;
-        await notion.pages.update({
-          page_id: row.id,
-          properties: {
-            [fields.error]: richText(String(error).slice(0, 1800)),
-            [fields.processedAt]: dateProperty(new Date().toISOString()),
-          } as any,
-        });
+        if (!dryRun) {
+          await notion.pages.update({
+            page_id: row.id,
+            properties: {
+              [fields.error]: richText(String(error).slice(0, 1800)),
+              [fields.processedAt]: dateProperty(new Date().toISOString()),
+            } as any,
+          });
+        }
         console.error(`Failed ${domain}: ${String(error)}`);
       }
     }
@@ -69,6 +83,15 @@ export async function syncNotionDatabase(forceRefresh = false, limit?: number): 
   } while (cursor);
 
   return stats;
+}
+
+function simplifyUpdate(update: Record<string, any>) {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(update)) {
+    if (value.rich_text) out[key] = value.rich_text[0]?.text?.content ?? "";
+    else if (value.date) out[key] = value.date.start;
+  }
+  return out;
 }
 
 function richText(content: string) {

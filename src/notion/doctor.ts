@@ -16,15 +16,17 @@ export async function runNotionDoctor(): Promise<void> {
   const requiredFields = Object.values(fields);
   const existing = new Set(Object.keys(db.properties));
   const missingFields = requiredFields.filter((field) => !existing.has(field));
-
   const databaseTitle = Array.isArray((db as any).title)
     ? (db as any).title.map((t: any) => t.plain_text).join("")
     : "Untitled";
 
   console.log("Notion database check");
   console.log(`Database title: ${databaseTitle}`);
+  console.log(`Database id: ${databaseId}`);
   console.log(`Domain field: ${fields.domainProperty}`);
   console.log(`Verifier mode: ${process.env.EMAIL_VERIFIER_PROVIDER ?? "none"}`);
+  console.log("Expected fields:");
+  requiredFields.forEach((field) => console.log(`- ${field}`));
 
   if (missingFields.length) {
     console.log(`Missing properties: ${missingFields.join(", ")}`);
