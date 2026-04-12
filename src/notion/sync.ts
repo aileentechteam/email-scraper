@@ -1,53 +1,74 @@
 import { Client } from "@notionhq/client";
 import { discoverEmails } from "../core/discovery.js";
+import { getNotionFieldMap } from "./config.js";
 
-export async function syncNotionDatabase(forceRefresh = false): Promise<void> {
+export interface SyncStats {
+  totalRows: number;
+  processed: number;
+  skipped: number;
+  failed: number;
+}
+
+export async function syncNotionDatabase(forceRefresh = false, limit?: number): Promise<SyncStats> {
   const notion = new Client({ auth: process.env.NOTION_API_KEY });
   const databaseId = process.env.NOTION_DATABASE_ID;
   if (!databaseId) throw new Error("NOTION_DATABASE_ID is required");
 
-  const domainProperty = process.env.NOTION_DOMAIN_PROPERTY ?? "Website";
-  const processedAtProperty = process.env.NOTION_PROCESSED_AT_PROPERTY ?? "processed_at";
-  const errorProperty = process.env.NOTION_ERROR_PROPERTY ?? "notes_error";
+  const fields = getNotionFieldMap();
+  const stats: SyncStats = { totalRows: 0, processed: 0, skipped: 0, failed: 0 };
 
   let cursor: string | undefined;
-  do {
+  outer: do {
     const page = await notion.databases.query({ database_id: databaseId, start_cursor: cursor });
     for (const row of page.results) {
       if (!("properties" in row)) continue;
+      stats.totalRows += 1;
       const properties = row.properties as Record<string, any>;
-      const domain = extractDomainValue(properties[domainProperty]);
-      if (!domain) continue;
-      if (!forceRefresh && hasProcessedValue(properties[processedAtProperty])) continue;
+      const domain = extractDomainValue(properties[fields.domainProperty]);
+      if (!domain) {
+        stats.skipped += 1;
+        continue;
+      }
+      if (!forceRefresh && hasProcessedValue(properties[fields.processedAt])) {
+        stats.skipped += 1;
+        continue;
+      }
+      if (limit && stats.processed >= limit) break outer;
 
       try {
         const result = await discoverEmails(domain, forceRefresh);
         const candidates = result.candidates;
         const update: Record<string, any> = {
-          [process.env.NOTION_RECOMMENDED_EMAIL_1_PROPERTY ?? "recommended_email_1"]: richText(candidates[0]?.email ?? ""),
-          [process.env.NOTION_RECOMMENDED_EMAIL_2_PROPERTY ?? "recommended_email_2"]: richText(candidates[1]?.email ?? ""),
-          [process.env.NOTION_RECOMMENDED_EMAIL_3_PROPERTY ?? "recommended_email_3"]: richText(candidates[2]?.email ?? ""),
-          [process.env.NOTION_BEST_EMAIL_PROPERTY ?? "best_email"]: richText(result.bestFirstOutreach?.email ?? ""),
-          [process.env.NOTION_CONFIDENCE_SUMMARY_PROPERTY ?? "confidence_summary"]: richText(result.confidenceSummary),
-          [process.env.NOTION_VERIFICATION_STATUS_PROPERTY ?? "verification_status"]: richText(result.bestFirstOutreach?.verification.status ?? "no result"),
-          [process.env.NOTION_OUTREACH_NOTES_PROPERTY ?? "outreach_notes"]: richText(result.outreachNotes),
-          [processedAtProperty]: dateProperty(new Date().toISOString()),
-          [errorProperty]: richText(""),
+          [fields.recommended1]: richText(candidates[0]?.email ?? ""),
+          [fields.recommended2]: richText(candidates[1]?.email ?? ""),
+          [fields.recommended3]: richText(candidates[2]?.email ?? ""),
+          [fields.bestEmail]: richText(result.bestFirstOutreach?.email ?? ""),
+          [fields.confidenceSummary]: richText(result.confidenceSummary),
+          [fields.verificationStatus]: richText(result.bestFirstOutreach?.verification.status ?? "inferred only"),
+          [fields.outreachNotes]: richText(result.outreachNotes),
+          [fields.processedAt]: dateProperty(new Date().toISOString()),
+          [fields.error]: richText(""),
         };
 
         await notion.pages.update({ page_id: row.id, properties: update as any });
+        stats.processed += 1;
+        console.log(`Processed ${domain}`);
       } catch (error) {
+        stats.failed += 1;
         await notion.pages.update({
           page_id: row.id,
           properties: {
-            [errorProperty]: richText(String(error).slice(0, 1800)),
-            [processedAtProperty]: dateProperty(new Date().toISOString()),
+            [fields.error]: richText(String(error).slice(0, 1800)),
+            [fields.processedAt]: dateProperty(new Date().toISOString()),
           } as any,
         });
+        console.error(`Failed ${domain}: ${String(error)}`);
       }
     }
     cursor = page.has_more ? page.next_cursor ?? undefined : undefined;
   } while (cursor);
+
+  return stats;
 }
 
 function richText(content: string) {

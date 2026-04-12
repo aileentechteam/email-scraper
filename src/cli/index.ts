@@ -1,4 +1,6 @@
+import "dotenv/config";
 import { discoverEmails } from "../core/discovery.js";
+import { runNotionDoctor } from "../notion/doctor.js";
 import { syncNotionDatabase } from "../notion/sync.js";
 
 async function main(): Promise<void> {
@@ -11,16 +13,24 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "doctor") {
+    await runNotionDoctor();
+    return;
+  }
+
   if (command === "notion-sync") {
-    const forceRefresh = arg === "--force";
-    await syncNotionDatabase(forceRefresh);
-    console.log("Notion sync complete");
+    const forceRefresh = arg === "--force" || extra === "--force";
+    const limitArg = [arg, extra].find((value) => value?.startsWith("--limit="));
+    const limit = limitArg ? Number(limitArg.split("=")[1]) : undefined;
+    const stats = await syncNotionDatabase(forceRefresh, limit);
+    console.log(JSON.stringify(stats, null, 2));
     return;
   }
 
   console.log("Usage:");
+  console.log("  npm run dev -- doctor");
   console.log("  npm run dev -- inspect https://example.com [--force]");
-  console.log("  npm run dev -- notion-sync [--force]");
+  console.log("  npm run dev -- notion-sync [--force] [--limit=25]");
 }
 
 main().catch((error) => {

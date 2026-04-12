@@ -2,27 +2,24 @@
 
 Production-oriented internal lead enrichment tool for Not Just Sundays wholesale outreach.
 
+## Current usable-state goals
+
+This version is meant to be the first actually usable internal ops tool:
+
+- env loads automatically from `.env`
+- there is a `doctor` command to validate Notion setup before syncing
+- sync skips rows already processed unless `--force`
+- you can test with `--limit=25` before running the full table
+- crawl is lightweight, cached, and robots-aware
+- MVP runs with no external verifier
+- V2 verifies only the top-ranked email to keep cost down
+
 ## MVP approach
 
 - No external verifier by default
 - Use inference + confidence scoring + manual review
 - If you enable a verifier later, only the top-ranked email is verified
 - Remaining candidates stay inferred so costs stay low
-
-## Features
-
-- Reads lead rows from Notion
-- Finds website/domain field
-- Skips processed rows unless `--force` is used
-- Light, domain-limited crawl of public pages
-- Respects `robots.txt` when checking candidate pages
-- Extracts names, titles, and wholesale-relevant contact clues
-- Infers likely business emails when none are explicitly listed
-- Prioritizes owner, founder, buyer, partnerships, wholesale, manager, bookstore/ministry contacts
-- Optional verification through a pluggable provider adapter
-- Writes structured results back into dedicated Notion fields
-- Logs failures into a Notion error field
-- Caches crawl results to reduce repeated requests
 
 ## Install
 
@@ -51,16 +48,7 @@ NOTION_ERROR_PROPERTY=notes_error
 EMAIL_VERIFIER_PROVIDER=none
 ```
 
-For V2, choose one verifier and only the top-ranked email will be checked:
-
-```bash
-EMAIL_VERIFIER_PROVIDER=abstract
-ABSTRACT_API_KEY=
-```
-
-## Notion schema assumptions
-
-Recommended properties:
+## Recommended Notion schema
 
 ```text
 Website
@@ -77,6 +65,12 @@ notes_error
 
 ## Commands
 
+Check setup first:
+
+```bash
+npm run dev -- doctor
+```
+
 Inspect one domain:
 
 ```bash
@@ -84,10 +78,21 @@ npm run dev -- inspect https://example.com
 npm run dev -- inspect https://example.com --force
 ```
 
-Batch enrich Notion:
+Run a safe test batch first:
+
+```bash
+npm run dev -- notion-sync --limit=25
+```
+
+Run full sync:
 
 ```bash
 npm run dev -- notion-sync
+```
+
+Force reprocess all rows:
+
+```bash
 npm run dev -- notion-sync --force
 ```
 
@@ -133,11 +138,10 @@ Supported:
 - Crawl stays lightweight and domain-limited
 - `robots.txt` is checked before fetching candidate pages
 
-## Deployment options
+## Best next improvements
 
-Good MVP deployment targets:
-
-- small cron-driven Node worker
-- Railway/Render background service
-- GitHub Actions scheduled job
-- local ops box running on a timer
+- add structured CSV export
+- add richer tests on real lead samples
+- add a tiny web UI for non-technical use
+- add retries/backoff for provider APIs
+- add better company/person extraction heuristics
