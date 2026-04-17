@@ -16,8 +16,25 @@ npm run dev -- notion-sync
 That lets you:
 - confirm your Notion schema
 - preview what would be written
-- test a small batch
+- test 5 rows
+- test 25 rows
 - then run the real sync
+
+## Fastest ways to test
+
+### Test one domain
+
+```bash
+npm run dev -- inspect https://example.com
+```
+
+### Test a handful of example domains and export CSV
+
+```bash
+npm run dev -- inspect-file ./sample-domains.txt --out=./results.csv
+```
+
+That gives you a reviewable CSV before you even connect Notion.
 
 ## Current usable-state goals
 
@@ -31,6 +48,7 @@ This version is meant to be the first actually usable internal ops tool:
 - crawl is lightweight, cached, and robots-aware
 - MVP runs with no external verifier
 - V2 verifies only the top-ranked email to keep cost down
+- you can export sample CSV results before touching Notion
 
 ## MVP approach
 
@@ -94,6 +112,12 @@ Inspect one domain:
 ```bash
 npm run dev -- inspect https://example.com
 npm run dev -- inspect https://example.com --force
+```
+
+Inspect a file of domains and export CSV:
+
+```bash
+npm run dev -- inspect-file ./sample-domains.txt --out=./results.csv
 ```
 
 Preview a small batch without writing to Notion:
@@ -164,7 +188,7 @@ Supported:
 
 ## Best next improvements
 
-- add structured CSV export
+- add structured CSV export from Notion runs too
 - add richer tests on real lead samples
 - add a tiny web UI for non-technical use
 - add retries/backoff for provider APIs
